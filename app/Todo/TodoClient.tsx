@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useState, useEffect } from "react";
+import * as todoHandlers from "@/utils/todoHandlers";
 
 type Todo = {
   id: number;
@@ -9,7 +9,6 @@ type Todo = {
 };
 
 export default function TodoClient() {
-  const supabase = useMemo(() => createClient(), []);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [newTodo, setNewTodo] = useState("");
   const [loading, setLoading] = useState(false);
@@ -18,25 +17,38 @@ export default function TodoClient() {
 
   useEffect(() => {
     const fetchTodos = async () => {
-      const { data } = await supabase.from("todos").select();
-      setTodos(data || []);
+      try {
+        const data = await todoHandlers.fetchTodos();
+        setTodos(data);
+      } catch (error) {
+        console.error("Error fetching todos:", error);
+      }
     };
     fetchTodos();
-  }, [supabase]);
+  }, []);
 
   const handleAdd = async () => {
     if (!newTodo) return;
     setLoading(true);
-    await supabase.from("todos").insert({ title: newTodo });
-    setNewTodo("");
-    const { data } = await supabase.from("todos").select();
-    setTodos(data || []);
-    setLoading(false);
+    try {
+      await todoHandlers.addTodo(newTodo);
+      setNewTodo("");
+      const updatedTodos = await todoHandlers.fetchTodos();
+      setTodos(updatedTodos);
+    } catch (error) {
+      console.error("Error adding todo:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDelete = async (id: number) => {
-    await supabase.from("todos").delete().eq("id", id);
-    setTodos(todos.filter((t) => t.id !== id));
+    try {
+      await todoHandlers.deleteTodo(id);
+      setTodos(todos.filter((t) => t.id !== id));
+    } catch (error) {
+      console.error("Error deleting todo:", error);
+    }
   };
 
   const handleEdit = (todo: Todo) => {
@@ -47,12 +59,17 @@ export default function TodoClient() {
   const handleUpdate = async (id: number) => {
     if (!editingTitle) return;
     setLoading(true);
-    await supabase.from("todos").update({ title: editingTitle }).eq("id", id);
-    const { data } = await supabase.from("todos").select();
-    setTodos(data || []);
-    setEditingId(null);
-    setEditingTitle("");
-    setLoading(false);
+    try {
+      await todoHandlers.updateTodo(id, editingTitle);
+      const updatedTodos = await todoHandlers.fetchTodos();
+      setTodos(updatedTodos);
+      setEditingId(null);
+      setEditingTitle("");
+    } catch (error) {
+      console.error("Error updating todo:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCancel = () => {

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useState, useEffect } from "react";
+import * as noteHandlers from "@/utils/noteHandlers";
 
 type Note = {
   id: number;
@@ -9,7 +9,6 @@ type Note = {
 };
 
 export default function NotesClient() {
-  const supabase = useMemo(() => createClient(), []);
   const [notes, setNotes] = useState<Note[]>([]);
   const [newNote, setNewNote] = useState("");
   const [loading, setLoading] = useState(false);
@@ -18,25 +17,38 @@ export default function NotesClient() {
 
   useEffect(() => {
     const fetchNotes = async () => {
-      const { data } = await supabase.from("notes").select();
-      setNotes(data || []);
+      try {
+        const data = await noteHandlers.fetchNotes();
+        setNotes(data);
+      } catch (error) {
+        console.error("Error fetching notes:", error);
+      }
     };
     fetchNotes();
-  }, [supabase]);
+  }, []);
 
   const handleAdd = async () => {
     if (!newNote) return;
     setLoading(true);
-    await supabase.from("notes").insert({ title: newNote });
-    setNewNote("");
-    const { data } = await supabase.from("notes").select();
-    setNotes(data || []);
-    setLoading(false);
+    try {
+      await noteHandlers.addNote(newNote);
+      setNewNote("");
+      const updatedNotes = await noteHandlers.fetchNotes();
+      setNotes(updatedNotes);
+    } catch (error) {
+      console.error("Error adding note:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDelete = async (id: number) => {
-    await supabase.from("notes").delete().eq("id", id);
-    setNotes(notes.filter((note) => note.id !== id));
+    try {
+      await noteHandlers.deleteNote(id);
+      setNotes(notes.filter((note) => note.id !== id));
+    } catch (error) {
+      console.error("Error deleting note:", error);
+    }
   };
 
   const handleEdit = (note: Note) => {
@@ -47,12 +59,17 @@ export default function NotesClient() {
   const handleUpdate = async (id: number) => {
     if (!editingTitle) return;
     setLoading(true);
-    await supabase.from("notes").update({ title: editingTitle }).eq("id", id);
-    const { data } = await supabase.from("notes").select();
-    setNotes(data || []);
-    setEditingId(null);
-    setEditingTitle("");
-    setLoading(false);
+    try {
+      await noteHandlers.updateNote(id, editingTitle);
+      const updatedNotes = await noteHandlers.fetchNotes();
+      setNotes(updatedNotes);
+      setEditingId(null);
+      setEditingTitle("");
+    } catch (error) {
+      console.error("Error updating note:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCancel = () => {
